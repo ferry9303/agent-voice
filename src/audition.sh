@@ -55,7 +55,7 @@ print(json.dumps({"text": sys.argv[1], "voice": sys.argv[2]}))
     afplay "$wav"
     rm -f "$wav"
   else
-    echo "✗ $voice（合成失败）"
+    echo "✗ ${voice}（合成失败）"
   fi
 done
 

@@ -123,7 +123,7 @@ if [[ "$WANT_KOKORO" == "yes" ]]; then
     fi
   done
   [[ -n "$PYBIN" ]] || { echo "找不到与 $ARCH 匹配的 python3.12/3.13。" >&2; exit 1; }
-  say_ok "用 $PYBIN（$ARCH）"
+  say_ok "用 ${PYBIN}（${ARCH}）"
 
   mkdir -p "$TTS_HOME/models"
   if [[ ! -x "$TTS_HOME/.venv/bin/python" ]]; then
