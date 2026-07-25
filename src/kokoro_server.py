@@ -30,6 +30,22 @@ VOICES = HOME / "models/voices-v1.1-zh.bin"
 DEFAULT_VOICE = os.environ.get("AGENT_VOICE_KOKORO_VOICE", "zf_017")
 MAX_BODY = 64 * 1024
 
+# 只在句末切开。切到逗号一级会把片段弄得太短，模型对短输入会明显放慢语速
+# ——实测纯语音时长涨了 37%，听着发拖。逗号、顿号留在片段内交给模型自己处理。
+_SCALE = float(os.environ.get("AGENT_VOICE_PAUSE_SCALE", "1.0"))
+_SENTENCE = {"。": 380, "！": 380, "？": 380, "…": 380,
+             ".": 380, "!": 380, "?": 380,
+             "；": 300, ";": 300, "\n": 380}
+_CLAUSE = {"，": 240, ",": 240, "：": 260, ":": 260, "、": 170}
+
+# 切分粒度：
+#   sentence（默认）只在句末切，逗号交给模型
+#   clause         连逗号也切，停顿最规整但语速会慢，长句子听着发拖
+#   off            整段一次合成，最快但停顿时长完全不受控
+CHUNK_MODE = os.environ.get("AGENT_VOICE_CHUNK", "sentence")
+_ACTIVE = {"sentence": _SENTENCE, "clause": {**_SENTENCE, **_CLAUSE}}.get(CHUNK_MODE, {})
+PAUSE_MS = {ch: int(ms * _SCALE) for ch, ms in _ACTIVE.items()}
+
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 _lock = threading.Lock()   # kokoro / misaki 都不是线程安全的
@@ -62,15 +78,47 @@ def to_wav(samples, sample_rate: int) -> bytes:
     return buf.getvalue()
 
 
+def split_for_prosody(text: str) -> list[tuple[str, int]]:
+    """按标点切片，返回 [(片段, 片段后要插入的静音毫秒)]。
+
+    整段一次性丢给模型时，它自己的停顿时长完全不受控——实测同一段里
+    句号后 400ms、另一个句号后却只有 120ms。切开逐句合成再插入固定间隔，
+    才能让「句号 > 分号 > 逗号」的层次稳定下来。
+    """
+    segments: list[tuple[str, int]] = []
+    buf = ""
+    for ch in text:
+        buf += ch
+        pause = PAUSE_MS.get(ch)
+        if pause is not None:
+            if buf.strip():
+                segments.append((buf, pause))
+            buf = ""
+    if buf.strip():
+        segments.append((buf, 0))
+    return segments or [(text, 0)]
+
+
 def synthesize(text: str, voice: str, speed: float) -> bytes:
+    import numpy as np
+
+    chunks = []
+    sample_rate = 24000
     with _lock:
-        phonemes = _g2p(text)
-        if not phonemes:
-            return b""
-        samples, sample_rate = _engine.create(
-            phonemes, voice=voice, speed=speed, is_phonemes=True
-        )
-    return to_wav(samples, sample_rate)
+        for segment, pause in split_for_prosody(text):
+            phonemes = _g2p(segment)
+            if not phonemes:
+                continue
+            # trim=True 会削掉模型自带的首尾静音，这样插进去的间隔就是唯一的停顿
+            samples, sample_rate = _engine.create(
+                phonemes, voice=voice, speed=speed, is_phonemes=True, trim=True
+            )
+            chunks.append(np.asarray(samples))
+            if pause > 0:
+                chunks.append(np.zeros(int(sample_rate * pause / 1000), dtype="float32"))
+    if not chunks:
+        return b""
+    return to_wav(np.concatenate(chunks), sample_rate)
 
 
 class Handler(BaseHTTPRequestHandler):

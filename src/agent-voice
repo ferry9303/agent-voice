@@ -1,0 +1,153 @@
+#!/usr/bin/env bash
+# agent-voice —— 语音播报的日常操作入口。
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$(readlink "${BASH_SOURCE[0]}" || echo "${BASH_SOURCE[0]}")")" && pwd)"
+# shellcheck source=/dev/null
+source "$HERE/lib-ui.sh"
+
+CONFIG="${AGENT_VOICE_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-voice/config.env}"
+APP_HOME="${AGENT_VOICE_HOME:-$HOME/.local/share/agent-voice}"
+URL="${AGENT_VOICE_KOKORO_URL:-http://127.0.0.1:8127}"
+LABEL="com.agent-voice.kokoro-tts"
+LOG_DIR="$HOME/Library/Logs/agent-voice"
+
+conf_get() {
+  [[ -f "$CONFIG" ]] || { echo "$2"; return; }
+  ( set +u; source "$CONFIG" 2>/dev/null; echo "${!1:-$2}" )
+}
+
+conf_set() {
+  [[ -f "$CONFIG" ]] || { ui_err "找不到配置：$CONFIG"; return 1; }
+  python3 - "$CONFIG" "$1" "$2" <<'PY'
+import re, sys
+path, key, value = sys.argv[1], sys.argv[2], sys.argv[3]
+text = open(path, encoding="utf-8").read()
+line = f'{key}="${{{key}:-{value}}}"'
+pattern = re.compile(rf'^{re.escape(key)}=.*$', re.M)
+open(path, "w", encoding="utf-8").write(
+    pattern.sub(line, text) if pattern.search(text) else text.rstrip("\n") + f"\n{line}\n"
+)
+PY
+}
+
+service_up()  { curl -sf --max-time 2 "$URL/health" >/dev/null 2>&1; }
+hook_present() { grep -q "agent-voice" "$1" 2>/dev/null; }
+
+cmd_status() {
+  ui_title "agent-voice"
+
+  local engine voice enabled
+  enabled="$(conf_get AGENT_VOICE 1)"
+  engine="$(conf_get AGENT_VOICE_ENGINE auto)"
+  voice="$(conf_get AGENT_VOICE_KOKORO_VOICE zf_017)"
+
+  if [[ "$enabled" == "0" ]]; then
+    ui_warn "播报已关闭（agent-voice on 打开）"
+  else
+    ui_ok "播报已开启"
+  fi
+  ui_info "引擎 $engine · 音色 $voice · 长度 $(conf_get AGENT_VOICE_MAX_CHARS 200) 字"
+
+  if service_up; then
+    ui_ok "Kokoro 服务运行中（${URL}）"
+  elif [[ "$engine" == "say" ]]; then
+    ui_skip "Kokoro 未启用，用系统 say"
+  else
+    ui_err "Kokoro 服务没响应（agent-voice restart 重启）"
+  fi
+
+  hook_present "$HOME/.claude/settings.json" \
+    && ui_ok "Claude Code hook 已挂" || ui_warn "Claude Code hook 未挂"
+  if [[ -f "$HOME/.codex/hooks.json" ]]; then
+    if hook_present "$HOME/.codex/hooks.json"; then
+      grep -q "trusted_hash" "$HOME/.codex/config.toml" 2>/dev/null \
+        && ui_ok "Codex hook 已挂" \
+        || ui_warn "Codex hook 已挂，但可能还没信任授权"
+    else
+      ui_warn "Codex hook 未挂"
+    fi
+  fi
+  printf '\n'
+}
+
+cmd_on()  { conf_set AGENT_VOICE 1 && ui_ok "已开启播报"; }
+cmd_off() { conf_set AGENT_VOICE 0 && ui_ok "已关闭播报"; }
+
+cmd_voice() {
+  [[ $# -ge 1 ]] || { ui_err "用法：agent-voice voice <音色名>"; return 1; }
+  conf_set AGENT_VOICE_KOKORO_VOICE "$1" && ui_ok "音色已设为 $1"
+}
+
+cmd_test() {
+  local line="${1:-语音播报工作正常，这是一句测试。}"
+  printf '%s' "$line" | "$HERE/speak.sh"
+}
+
+cmd_restart() {
+  launchctl kickstart -k "gui/$(id -u)/$LABEL" 2>/dev/null \
+    || { ui_err "重启失败，服务可能没装"; return 1; }
+  printf '  等待就绪 '
+  for _ in $(seq 1 40); do
+    service_up && { printf '\n'; ui_ok "服务已就绪"; return 0; }
+    printf '.'; sleep 1
+  done
+  printf '\n'; ui_err "超时，看日志：agent-voice logs"
+}
+
+cmd_logs() { tail -n "${1:-40}" "$LOG_DIR/kokoro-tts.err.log" 2>/dev/null || ui_err "没有日志"; }
+
+cmd_doctor() {
+  ui_title "体检"
+  local bad=0
+
+  [[ -f "$CONFIG" ]] && ui_ok "配置 $CONFIG" || { ui_err "缺配置 $CONFIG"; bad=1; }
+  [[ -x "$APP_HOME/.venv/bin/python" ]] \
+    && ui_ok "venv 就绪" || { ui_warn "没装 Kokoro，只能用 say"; }
+  for f in kokoro-v1.1-zh.onnx voices-v1.1-zh.bin; do
+    [[ -s "$APP_HOME/models/$f" ]] && ui_ok "模型 $f" || ui_warn "缺模型 $f"
+  done
+  service_up && ui_ok "服务健康" || { ui_err "服务没响应"; bad=1; }
+  command -v sox >/dev/null && ui_ok "SoX 已装（Claude Code 语音输入需要）" \
+    || ui_warn "没装 SoX，Claude Code 的语音输入用不了：brew install sox"
+
+  if [[ -f "$HOME/.codex/hooks.json" ]] && hook_present "$HOME/.codex/hooks.json"; then
+    grep -q "trusted_hash" "$HOME/.codex/config.toml" 2>/dev/null \
+      || { ui_warn "Codex hook 可能没信任授权——开一次交互式 codex 批准即可"; }
+  fi
+  printf '\n'
+  [[ "$bad" == "0" ]] && ui_ok "没发现问题" || ui_warn "有问题，见上"
+  printf '\n'
+}
+
+cmd_help() {
+  printf '\n%sagent-voice%s  %s让 Claude Code / Codex 把回复念出来%s\n\n' \
+    "$UI_BOLD" "$UI_RESET" "$UI_DIM" "$UI_RESET"
+  ui_row_bold "status"          "看当前状态（默认）" 20
+  ui_row_bold "on / off"        "开 / 关播报" 20
+  ui_row_bold "test [句子]"     "立刻念一句听听" 20
+  ui_row_bold "voices"          "列出全部 103 个音色" 20
+  ui_row_bold "try [音色]"      "试听音色，逗号分隔可听多个" 20
+  ui_row_bold "voice <音色>"    "设为默认音色" 20
+  ui_row_bold "config"          "编辑配置" 20
+  ui_row_bold "restart"         "重启合成服务" 20
+  ui_row_bold "logs [行数]"     "看服务日志" 20
+  ui_row_bold "doctor"          "体检，排查不出声" 20
+  printf '\n'
+}
+
+case "${1:-status}" in
+  status)  cmd_status ;;
+  on)      cmd_on ;;
+  off)     cmd_off ;;
+  test)    shift; cmd_test "$@" ;;
+  voices)  "$HERE/audition.sh" -l ;;
+  try)     shift; [[ $# -ge 1 ]] && "$HERE/audition.sh" -v "$1" || "$HERE/audition.sh" ;;
+  voice)   shift; cmd_voice "$@" ;;
+  config)  "${EDITOR:-vi}" "$CONFIG" ;;
+  restart) cmd_restart ;;
+  logs)    shift; cmd_logs "$@" ;;
+  doctor)  cmd_doctor ;;
+  -h|--help|help) cmd_help ;;
+  *)       ui_err "不认识的命令：$1"; cmd_help; exit 1 ;;
+esac

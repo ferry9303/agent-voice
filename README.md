@@ -15,48 +15,57 @@ cd agent-voice
 ./install.sh
 ```
 
-会问你要不要装 Kokoro 本地神经 TTS（约 400MB 模型，音质接近真人）。
-不装就用系统自带的 `say`，零依赖但听着机械。
+安装器会先探测环境、把要做的事列出来，确认后再动手。会问你要不要装
+Kokoro 本地神经 TTS（约 400MB 模型，音质接近真人）；不装就用系统自带的
+`say`，零依赖但听着机械。`-y` 跳过所有提问，`--no-kokoro` 只装轻量版。
 
-装完即生效，两个 CLI 都不用重启。
+```
+agent-voice  让 Claude Code / Codex 把回复念出来
+
+将要安装
+  脚本            ~/.local/share/agent-voice/bin
+  命令            ~/.local/bin/agent-voice
+  配置            ~/.config/agent-voice/config.env
+  Claude Code     挂 Stop hook
+  Codex           挂 Stop hook（需一次性信任授权）
+  神经 TTS        Kokoro 中文（要下约 400MB 模型）
+```
+
+装完即生效，两个 CLI 都不用重启。重复跑安装器是幂等的，不会重下模型。
 
 > Codex 侧还需要**一次性信任授权**：下次开交互式 `codex` 时会弹一个确认框，
 > 批准即可。没批准的 hook 会被**静默跳过**——不报错也不出声，容易误以为没装上。
 
-## 怎么挑音色
-
-Kokoro 有 103 个中文音色（`zf_*` 女声、`zm_*` 男声）。
-
-```bash
-~/.local/share/agent-voice/bin/audition.sh              # 试听默认候选的 7 个
-~/.local/share/agent-voice/bin/audition.sh -l           # 列出全部 103 个
-~/.local/share/agent-voice/bin/audition.sh -v zf_003,zm_010,zm_035   # 只听指定几个
-~/.local/share/agent-voice/bin/audition.sh "换句话试试" # 换试听文本
-```
-
-挑好写进 `~/.config/agent-voice/config.env`：
-
-```bash
-AGENT_VOICE_KOKORO_VOICE="${AGENT_VOICE_KOKORO_VOICE:-zf_021}"
-```
-
-改完立即生效，不用重启也不用重载服务。
-
 ## 日常怎么用
 
-装完就不用管了，正常用 Claude Code / Codex 就行。要调的只有这几件：
+装完就不用管了，正常用 Claude Code / Codex 就行。要调的都在 `agent-voice` 命令里：
 
-| 想做什么 | 怎么做 |
+```
+agent-voice                 看当前状态
+agent-voice test            立刻念一句听听
+agent-voice voices          列出全部 103 个音色
+agent-voice try zf_003,zm_010   试听指定音色
+agent-voice voice zf_021    设为默认音色
+agent-voice off / on        临时静音 / 恢复
+agent-voice config          编辑配置
+agent-voice restart         重启合成服务
+agent-voice logs            看服务日志
+agent-voice doctor          不出声时排查
+```
+
+音色分 `zf_*`（女声）和 `zm_*`（男声）。`agent-voice try` 不带参数会放几个
+候选让你先听个大概，选中哪个再 `agent-voice voice <名字>` 定下来。
+
+更细的调节改 `~/.config/agent-voice/config.env`，**改完立即生效**，不用重启：
+
+| 想做什么 | 改哪个 |
 |---|---|
-| 临时静音 | `~/.config/agent-voice/config.env` 里 `AGENT_VOICE` 改成 `0` |
-| 播报太长/太短 | 调 `AGENT_VOICE_MAX_CHARS`（默认 200，只想听一句就调到 60） |
-| 念太快/太慢 | 调 `AGENT_VOICE_SPEED`（默认 1.0） |
-| 换音色 | 见上面「怎么挑音色」 |
-| 服务挂了 | `launchctl kickstart -k gui/$(id -u)/com.agent-voice.kokoro-tts` |
-| 看日志 | `~/Library/Logs/agent-voice/kokoro-tts.err.log` |
-| 卸载 | `./uninstall.sh`（加 `--purge` 连模型一起删） |
+| 播报太长/太短 | `AGENT_VOICE_MAX_CHARS`（默认 200，只想听一句就调到 60） |
+| 念太快/太慢 | `AGENT_VOICE_SPEED`（默认 1.0） |
+| 不想用 Kokoro | `AGENT_VOICE_ENGINE` 改成 `say` |
 
-全部配置项见 [`config.env.example`](config.env.example)。
+全部配置项见 [`config.env.example`](config.env.example)。卸载跑 `./uninstall.sh`
+（加 `--purge` 连模型一起删）。
 
 ## 方案
 
@@ -77,6 +86,10 @@ Codex CLI ────Stop hook──┘                                └ 失�
   服务由 launchd 托管，开机自启、挂掉自愈，合成稳定在 1.4 秒。
 - **中英混排单独处理。** misaki 的中文 G2P 会把英文原样透传，
   「Stop hook」这种会被念错，所以英文单独走 espeak 出音素再拼回去。
+- **断句自己控。** 整段一次性丢给模型，它自己的停顿忽长忽短——实测同一段里
+  句号后 400ms、另一个句号后只有 120ms，听着就是不按标点走。改成按句末切开
+  逐句合成、再插入固定长度静音。切到逗号一级会更规整，但模型对短片段会明显
+  放慢语速（纯语音时长 +37%），所以默认只切句末，`AGENT_VOICE_CHUNK` 可调。
 
 ## 文件
 
