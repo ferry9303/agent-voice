@@ -46,6 +46,8 @@ done | while read -r name; do ui_ok "已从 $name 摘除"; done
 ui_step "移除脚本与命令"
 [[ -L "$LINK" ]] && rm -f "$LINK" && ui_ok "$LINK"
 [[ -L "$BIN_DIR/agent-voice" ]] && rm -f "$BIN_DIR/agent-voice" && ui_ok "$BIN_DIR/agent-voice"
+[[ -L "$HOME/.claude/commands/tts.md" ]] && rm -f "$HOME/.claude/commands/tts.md" \
+  && ui_ok "~/.claude/commands/tts.md"
 
 if [[ -n "$PURGE" ]]; then
   ui_step "清理模型与配置"

@@ -36,39 +36,45 @@ agent-voice  让 Claude Code / Codex 把回复念出来
 > Codex 侧还需要**一次性信任授权**：下次开交互式 `codex` 时会弹一个确认框，
 > 批准即可。没批准的 hook 会被**静默跳过**——不报错也不出声，容易误以为没装上。
 
-## 在 Claude Code 里直接开关（插件）
+## 在会话里直接开关
 
-不想切出去敲命令的话，把本仓当插件装上，就多一个 `/tts` 斜杠命令：
-
-```
-/plugin marketplace add ferry9303/agent-voice
-/plugin install agent-voice@agent-voice
-```
-
-之后在会话里直接：
+`install.sh` 会顺带装一个 `/tts` 命令（重开会话后可用）：
 
 ```
+/tts                  看状态
 /tts off              临时静音
 /tts on               恢复
-/tts                  看状态
 /tts test 念一句试试
 /tts try              试听音色
 /tts voice zf_021     换音色
 /tts doctor           不出声时排查
 ```
 
-> 插件只提供命令，**朗读引擎还是要先跑 `./install.sh`**（要建 venv、下模型、
-> 装常驻服务，插件干不了这些）。这么分也是为了避免插件和 install.sh 各挂一次
-> Stop hook 导致同一段话念两遍。
+Codex 那边没有自定义斜杠命令的机制（它的自定义命令要走 MCP），所以给 Codex 的是
+一个 **skill**：直接跟它说「关掉语音播报」「换个声音」，它知道该调 `agent-voice`
+的哪个子命令。
 
-Codex 那边没有自定义斜杠命令的机制（它的自定义命令要走 MCP），所以本仓给 Codex
-提供的是一个 **skill**：直接跟它说「关掉语音播报」「换个声音」就行，它知道该调
-`agent-voice` 的哪个子命令。装法：
+### 也可以当插件装
+
+想走插件分发的话：
+
+```
+/plugin marketplace add ferry9303/agent-voice
+/plugin install agent-voice@agent-voice
+```
 
 ```bash
 codex plugin marketplace add ferry9303/agent-voice
-codex plugin add agent-voice
+codex plugin add agent-voice@agent-voice
 ```
+
+> 插件命令**带命名空间前缀**，是 `/agent-voice:tts` 而不是 `/tts`——敲 `/tts`
+> 只能靠补全选中，不能直接回车。想要裸的 `/tts` 就用 `install.sh` 装的那个
+> 用户级命令，两者不冲突。
+>
+> 另外插件只提供命令，**朗读引擎仍要跑 `./install.sh`**（建 venv、下模型、装常驻
+> 服务，插件干不了）。插件也刻意不带 Stop hook，否则和 install.sh 各挂一次，
+> 同一段话会念两遍。
 
 ## 日常怎么用
 

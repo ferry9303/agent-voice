@@ -147,6 +147,11 @@ report() { [[ "$1" == SKIP* ]] && ui_skip "${1#SKIP }" || ui_ok "${1#OK }"; }
 
 if [[ -n "$HAS_CLAUDE" ]]; then
   report "$(wire_hook "$HOME/.claude/settings.json" claude-stop.sh "Claude Code")"
+  # 用户级命令，这样是裸的 /tts。作为插件装会带命名空间前缀（/agent-voice:tts），
+  # 敲 /tts 只能靠补全选中，不能直接回车。
+  mkdir -p "$HOME/.claude/commands"
+  ln -sfn "$REPO/commands/tts.md" "$HOME/.claude/commands/tts.md"
+  ui_ok "/tts 命令已装（重开会话后可用）"
 else
   ui_skip "Claude Code 没装"
 fi
