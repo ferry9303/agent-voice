@@ -1,0 +1,19 @@
+{
+  "name": "agent-voice",
+  "id": "agent-voice",
+  "owner": {
+    "name": "ferry9303",
+    "url": "https://github.com/ferry9303"
+  },
+  "metadata": {
+    "description": "让 Claude Code / Codex 把回复念出来，本地 Kokoro 神经 TTS",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "agent-voice",
+      "source": "./",
+      "description": "提供 /tts 命令：随时开关语音播报、换音色、试听、排查。朗读引擎本身由仓里的 install.sh 安装。"
+    }
+  ]
+}

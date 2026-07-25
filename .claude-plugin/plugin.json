@@ -1,0 +1,20 @@
+{
+  "name": "agent-voice",
+  "version": "1.0.0",
+  "description": "让 Claude Code 把回复念出来，并提供 /tts 命令随时开关、换音色、试听",
+  "author": {
+    "name": "Ferry",
+    "url": "https://github.com/ferry9303"
+  },
+  "homepage": "https://github.com/ferry9303/agent-voice",
+  "repository": "https://github.com/ferry9303/agent-voice",
+  "license": "MIT",
+  "keywords": [
+    "tts",
+    "voice",
+    "speech",
+    "kokoro",
+    "accessibility",
+    "macos"
+  ]
+}

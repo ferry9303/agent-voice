@@ -1,0 +1,27 @@
+{
+  "name": "agent-voice",
+  "version": "1.0.0",
+  "description": "让 Codex 把回复念出来，并提供开关、换音色、排查的操作说明",
+  "author": {
+    "name": "Ferry",
+    "url": "https://github.com/ferry9303"
+  },
+  "homepage": "https://github.com/ferry9303/agent-voice",
+  "repository": "https://github.com/ferry9303/agent-voice.git",
+  "license": "MIT",
+  "keywords": [
+    "tts",
+    "voice",
+    "speech",
+    "kokoro",
+    "macos"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "agent-voice",
+    "shortDescription": "回复结束时把摘要念出来，本地 Kokoro 神经 TTS。",
+    "longDescription": "朗读引擎由仓里的 install.sh 安装（venv + 模型 + launchd 常驻服务），本插件提供让 Codex 理解如何开关和调节它的技能说明。",
+    "developerName": "Ferry",
+    "category": "Developer Tools"
+  }
+}
