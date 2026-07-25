@@ -7,6 +7,8 @@ misaki 的中文 G2P 会把非中文段原样透传，Kokoro 收到裸拉丁字�
 
 import re
 
+import zh_unaspirated
+
 CJK = "一-鿿㐀-䶿豈-﫿"
 SEGMENT = re.compile(f"[{CJK}]+|[^{CJK}]+")
 IS_CJK = re.compile(f"[{CJK}]")
@@ -63,7 +65,8 @@ class MixedG2P:
         parts = []
         for segment in SEGMENT.findall(text):
             if IS_CJK.search(segment):
-                parts.append(self._zh(segment))
+                # 只改中文段：英文段的 p/t/k 是 espeak 出的真英语音，不能动
+                parts.append(zh_unaspirated.fix(self._zh(segment)))
             else:
                 parts.append(self._non_chinese(segment))
         return "".join(parts).strip()
