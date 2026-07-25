@@ -48,8 +48,7 @@ CLEAN_RULES = (
     # —— 以下三条专治「停顿插在词中间」——
     # 路径、包名、带冒号的命令里的 / : . 会原样进入音素流，Kokoro 拿它们当断句符，
     # 于是 commands/tts.md 会在词中间断两次。统一压成最后一个可读片段。
-    (re.compile(r"[~\w.-]*(?:[/:][\w.-]+)+"),
-     lambda m: re.split(r"[/:]", m.group(0).rstrip("/:"))[-1]),
+    (re.compile(r"[~\w.-]*(?:[/:][\w.-]+)+"), lambda m: _shorten_qualified(m.group(0))),
     (re.compile(r"(?<![\w])/([A-Za-z][\w-]*)"), r"\1"),   # /tts 这类命令去掉前导斜杠
     # 去掉文件扩展名：".sh" 会被念成 "dot ess aitch"
     # 用 + 允许连续多个扩展名：kokoro-tts.err.log 要一次剥干净，
@@ -60,12 +59,36 @@ CLEAN_RULES = (
         r"|env|cfg|conf|ini|lock|xml|csv|sql|rs|go|java|rb|php|c|h|cpp|swift|kt|err|out))+\b"),
      r"\1"),
     (re.compile(r"[\U0001F300-\U0001FAFF☀-➿]"), ""),  # emoji
+    # 空格夹着的孤立符号（行文里举例用的 / : . 之类）会被逐个念出来。
+    # 写成「一串以空格分隔的符号」整体匹配，不然 "/ : ." 里的分隔空格
+    # 会被前一次匹配吃掉，导致只删得掉第一个。
+    # 边界用「前后都不是字母数字或汉字」，不能用空格：符号前面常常是中文逗号。
+    # 这个边界同时保护了 2.1.220 / a/b / 3:5——它们的符号紧贴着字，不会被匹配。
+    (re.compile(r"(?<![\w一-鿿])[/:;.,~`|\\^*=+<>@#$%&_-]+"
+                r"(?:\s+[/:;.,~`|\\^*=+<>@#$%&_-]+)*(?![\w一-鿿])"), " "),
 )
+
+# 剥掉代码块/路径后常留下「：，」这种连排标点，念出来是两个停顿顶在一起。
+# 一串标点只留最强的那个：句末 > 分号 > 冒号 > 逗号顿号。
+PUNCT_RANK = {c: i for i, c in enumerate("、，,：:；;。！？!?")}
+PUNCT_RUN = re.compile(r"[、，,：:；;。！？!?]{2,}")
 
 # 一句话里非中文字符占比超过这个数，就当成代码行跳过——整句都是标识符时，
 # 念出来是一串字母，既听不懂又打乱节奏。
 CODE_DENSITY_LIMIT = 0.6
 CJK_RE = re.compile("[一-鿿]")
+
+def _shorten_qualified(token: str) -> str:
+    """把 commands/tts.md 这类带 / : 的标识符压成最后一段。
+
+    只在「确实像路径或包名」时动手：`3:5`、`a/b` 这种要原样留着，
+    否则比例和短变量名会被吃掉。
+    """
+    core = token.rstrip("/:")
+    if not re.search(r"[A-Za-z]", core) or len(core) < 4:
+        return token
+    return re.split(r"[/:]", core)[-1] or token
+
 
 COLLAPSE_WS = re.compile(r"[ \t　]+")
 COLLAPSE_NL = re.compile(r"\n{2,}")
@@ -74,6 +97,9 @@ COLLAPSE_NL = re.compile(r"\n{2,}")
 def clean(text: str) -> str:
     for pattern, repl in CLEAN_RULES:
         text = pattern.sub(repl, text)
+    # 删掉东西后常留下「， 会原样」这种标点旁的空隙，先贴紧再合并连排标点
+    text = re.sub(r"\s*([，。：；、！？])\s*", r"\1", text)
+    text = PUNCT_RUN.sub(lambda m: max(m.group(0), key=PUNCT_RANK.get), text)
     text = COLLAPSE_WS.sub(" ", text)
     text = COLLAPSE_NL.sub("\n", text)
     return text.strip()
@@ -121,7 +147,9 @@ def pick(sentences: list[str]) -> str:
     picked: list[str] = []
     total = 0
     for sentence in readable[:MAX_SENTENCES]:
-        if picked and picked[-1][-1] not in SENTENCE_END:
+        # 只在上一句没有任何句读收尾时补逗号。判 SENTENCE_END 不够——
+        # 上一句以「：」结尾时会补出「：，」，念成两个顶在一起的停顿。
+        if picked and picked[-1][-1] not in PUNCT_RANK:
             picked.append("，")
         picked.append(sentence)
         total += len(sentence)
