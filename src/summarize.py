@@ -124,8 +124,11 @@ def split_sentences(text: str) -> list[str]:
     buf = ""
     for ch in text:
         if ch == "\n":
-            if buf.strip():
-                sentences.append(buf.strip())
+            # 换行本身就是个停顿。标题、列表项这些不带句号的，补一个句号，
+            # 后面按句末切分时才会在这儿断开——否则会跟下一条连读成一句。
+            item = buf.strip()
+            if item:
+                sentences.append(item if item[-1] in PUNCT_RANK else item + "。")
             buf = ""
             continue
         buf += ch

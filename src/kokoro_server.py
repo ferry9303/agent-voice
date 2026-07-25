@@ -65,10 +65,30 @@ def load() -> None:
     _g2p("预热一下 warm up。")  # 首次调用会建 jieba 词典，提前吃掉这份延迟
 
 
+# 模型输出本身偏小：实测峰值 0.39、RMS -23.6 dBFS，而系统 say 是 -17.2 dBFS，
+# 同样的系统音量下听着小一半。按 RMS 归一到常见的语音响度，再用峰值上限兜底防削波。
+TARGET_RMS_DB = float(os.environ.get("AGENT_VOICE_TARGET_RMS_DB", "-18"))
+PEAK_CEILING = 0.95
+
+
+def normalize(samples):
+    import numpy as np
+
+    audio = np.asarray(samples, dtype="float32")
+    peak = float(np.abs(audio).max()) if audio.size else 0.0
+    rms = float(np.sqrt((audio.astype("float64") ** 2).mean())) if audio.size else 0.0
+    if peak <= 0 or rms <= 0:
+        return audio
+    target = 10 ** (TARGET_RMS_DB / 20)
+    # 取两者较小的那个增益：响度够了但绝不削波
+    gain = min(target / rms, PEAK_CEILING / peak)
+    return audio * gain
+
+
 def to_wav(samples, sample_rate: int) -> bytes:
     import numpy as np
 
-    pcm = np.clip(np.asarray(samples), -1.0, 1.0)
+    pcm = np.clip(normalize(samples), -1.0, 1.0)
     pcm = (pcm * 32767).astype("<i2")
     buf = io.BytesIO()
     with wave.open(buf, "wb") as fh:
