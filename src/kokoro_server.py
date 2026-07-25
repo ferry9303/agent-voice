@@ -31,11 +31,13 @@ DEFAULT_VOICE = os.environ.get("AGENT_VOICE_KOKORO_VOICE", "zf_001")
 MAX_BODY = 64 * 1024
 
 # 各级标点切开后要插入的静音（毫秒），仅在 CHUNK_MODE 不是 off 时生效
+# 停顿要明显长过模型自插的那些零散小停顿（实测约 180ms），否则听不出层次——
+# 逗号原来只给 240ms，跟模型的 180ms 几乎一样，逗号就完全不像停顿。
 _SCALE = float(os.environ.get("AGENT_VOICE_PAUSE_SCALE", "1.0"))
-_SENTENCE = {"。": 380, "！": 380, "？": 380, "…": 380,
-             ".": 380, "!": 380, "?": 380,
-             "；": 300, ";": 300, "\n": 380}
-_CLAUSE = {"，": 240, ",": 240, "：": 260, ":": 260, "、": 170}
+_SENTENCE = {"。": 600, "！": 600, "？": 600, "…": 600,
+             ".": 600, "!": 600, "?": 600,
+             "；": 500, ";": 500, "\n": 600}
+_CLAUSE = {"，": 420, ",": 420, "：": 450, ":": 450, "、": 300}
 
 # 切分粒度：
 #   off（默认）  整段一次合成。语速最自然——切片会让模型对短片段放慢语速，
@@ -43,7 +45,13 @@ _CLAUSE = {"，": 240, ",": 240, "：": 260, ":": 260, "、": 170}
 #                代价是停顿时长由模型自己决定，句号和逗号的轻重不太分得开。
 #   sentence     只在句末切，句间插入固定静音，停顿层次稳定
 #   clause       连逗号也切，最规整但最拖
-CHUNK_MODE = os.environ.get("AGENT_VOICE_CHUNK", "off")
+CHUNK_MODE = os.environ.get("AGENT_VOICE_CHUNK", "clause")
+# 模型会在片段内部乱插停顿，长度跟标点停顿接近，听起来就像断错了地方。
+# 压到一个明显更短的值，让停顿只出现在标点处。
+SQUASH_GAPS = os.environ.get("AGENT_VOICE_SQUASH_GAPS", "1") != "0"
+GAP_THRESHOLD = 0.01      # 判定静音的幅度
+GAP_MIN_MS = 100          # 超过这么长才算「模型自插的停顿」
+GAP_KEEP_MS = 60          # 压缩后保留的长度
 _ACTIVE = {"sentence": _SENTENCE, "clause": {**_SENTENCE, **_CLAUSE}}.get(CHUNK_MODE, {})
 PAUSE_MS = {ch: int(ms * _SCALE) for ch, ms in _ACTIVE.items()}
 
@@ -120,6 +128,34 @@ def split_for_prosody(text: str) -> list[tuple[str, int]]:
     return segments or [(text, 0)]
 
 
+def squash_gaps(audio, sample_rate: int):
+    """把片段内部的长静音压短，只保留标点处我们自己插的停顿。
+
+    首尾不动——那是 trim 已经处理过的边界，动了会把片段黏在一起。
+    """
+    import numpy as np
+
+    window = int(sample_rate * 0.01)
+    if window <= 0 or audio.size < window * 3:
+        return audio
+    frames = np.abs(audio[: audio.size // window * window]).reshape(-1, window).max(axis=1)
+    quiet = frames < GAP_THRESHOLD
+    pieces, i, total = [], 0, len(frames)
+    while i < total:
+        j = i
+        while j < total and quiet[j] == quiet[i]:
+            j += 1
+        run_ms = (j - i) * 10
+        inner = i > 0 and j < total
+        if quiet[i] and inner and run_ms >= GAP_MIN_MS:
+            pieces.append(np.zeros(int(sample_rate * GAP_KEEP_MS / 1000), dtype="float32"))
+        else:
+            pieces.append(audio[i * window : j * window])
+        i = j
+    pieces.append(audio[total * window :])          # 末尾不足一窗的残余
+    return np.concatenate(pieces) if pieces else audio
+
+
 def synthesize(text: str, voice: str, speed: float) -> bytes:
     import numpy as np
 
@@ -134,7 +170,10 @@ def synthesize(text: str, voice: str, speed: float) -> bytes:
             samples, sample_rate = _engine.create(
                 phonemes, voice=voice, speed=speed, is_phonemes=True, trim=True
             )
-            chunks.append(np.asarray(samples))
+            piece = np.asarray(samples, dtype="float32")
+            if SQUASH_GAPS:
+                piece = squash_gaps(piece, sample_rate)
+            chunks.append(piece)
             if pause > 0:
                 chunks.append(np.zeros(int(sample_rate * pause / 1000), dtype="float32"))
     if not chunks:
