@@ -8,8 +8,8 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-URL="${WINCORP_TTS_KOKORO_URL:-http://127.0.0.1:8127}"
-TTS_HOME="${WINCORP_TTS_HOME:-$HOME/.local/share/wincorp-tts}"
+URL="${AGENT_VOICE_KOKORO_URL:-http://127.0.0.1:8127}"
+APP_HOME="${AGENT_VOICE_HOME:-$HOME/.local/share/agent-voice}"
 
 # 候选：女声/男声各挑几个，覆盖不同音区
 VOICES="zf_001,zf_017,zf_021,zf_032,zm_009,zm_020,zm_035"
@@ -18,9 +18,9 @@ LINE="语音播报已经接上了，回复结束时会自动念一句摘要给�
 while getopts ":lv:" opt; do
   case "$opt" in
     l)
-      "$TTS_HOME/.venv/bin/python" -c "
+      "$APP_HOME/.venv/bin/python" -c "
 from kokoro_onnx import Kokoro
-k = Kokoro('$TTS_HOME/models/kokoro-v1.1-zh.onnx', '$TTS_HOME/models/voices-v1.1-zh.bin')
+k = Kokoro('$APP_HOME/models/kokoro-v1.1-zh.onnx', '$APP_HOME/models/voices-v1.1-zh.bin')
 v = k.get_voices()
 print(f'共 {len(v)} 个音色：')
 for i in range(0, len(v), 8):
@@ -60,5 +60,5 @@ print(json.dumps({"text": sys.argv[1], "voice": sys.argv[2]}))
 done
 
 echo
-echo "选定后写进 ~/.claude/tts.env："
-echo "  WINCORP_TTS_KOKORO_VOICE=zf_017"
+echo "选定后写进 ~/.config/agent-voice/config.env："
+echo "  AGENT_VOICE_KOKORO_VOICE=zf_017"

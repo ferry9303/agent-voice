@@ -18,9 +18,9 @@ def _env_int(name: str, default: int) -> int:
     return value if value > 0 else default
 
 
-# 播报长度。想更啰嗦就调大 WINCORP_TTS_MAX_CHARS，想只听一句就调小。
-MAX_CHARS = _env_int("WINCORP_TTS_MAX_CHARS", 200)
-MAX_SENTENCES = _env_int("WINCORP_TTS_MAX_SENTENCES", 6)
+# 播报长度。想更啰嗦就调大 AGENT_VOICE_MAX_CHARS，想只听一句就调小。
+MAX_CHARS = _env_int("AGENT_VOICE_MAX_CHARS", 200)
+MAX_SENTENCES = _env_int("AGENT_VOICE_MAX_SENTENCES", 6)
 SENTENCE_END = "。！？!?；;"
 # 长句收尾时可以切开的位置。刻意不含空格——在空格处切会把
 # "Codex 用 notify" 截成 "Codex 用" 这种半截话。

@@ -8,8 +8,8 @@
        {"text": "...", "voice": "zf_017", "speed": 1.0}
 
 环境变量：
-  WINCORP_TTS_HOME    模型与 venv 所在目录，默认 ~/.local/share/wincorp-tts
-  WINCORP_TTS_PORT    监听端口，默认 8127
+  AGENT_VOICE_HOME    模型与 venv 所在目录，默认 ~/.local/share/agent-voice
+  AGENT_VOICE_PORT    监听端口，默认 8127
 """
 
 import io
@@ -22,12 +22,12 @@ import wave
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOME = pathlib.Path(
-    os.environ.get("WINCORP_TTS_HOME", pathlib.Path.home() / ".local/share/wincorp-tts")
+    os.environ.get("AGENT_VOICE_HOME", pathlib.Path.home() / ".local/share/agent-voice")
 )
-PORT = int(os.environ.get("WINCORP_TTS_PORT", "8127"))
+PORT = int(os.environ.get("AGENT_VOICE_PORT", "8127"))
 MODEL = HOME / "models/kokoro-v1.1-zh.onnx"
 VOICES = HOME / "models/voices-v1.1-zh.bin"
-DEFAULT_VOICE = os.environ.get("WINCORP_TTS_KOKORO_VOICE", "zf_017")
+DEFAULT_VOICE = os.environ.get("AGENT_VOICE_KOKORO_VOICE", "zf_017")
 MAX_BODY = 64 * 1024
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))

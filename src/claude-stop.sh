@@ -7,20 +7,22 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STATE_DIR="${TMPDIR:-/tmp}/wincorp-tts"
+STATE_DIR="${TMPDIR:-/tmp}/agent-voice"
 
-[[ -n "${WINCORP_TTS_CHILD:-}" ]] && exit 0
+[[ -n "${AGENT_VOICE_CHILD:-}" ]] && exit 0
 # shellcheck disable=SC1090
-[[ -f "$HOME/.claude/tts.env" ]] && source "$HOME/.claude/tts.env"
-[[ "${WINCORP_TTS:-1}" == "0" ]] && exit 0
-WAIT_FOR_REPLY="${WINCORP_TTS_WAIT:-6}"
+CONFIG="${AGENT_VOICE_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-voice/config.env}"
+# shellcheck disable=SC1090
+[[ -f "$CONFIG" ]] && source "$CONFIG"
+[[ "${AGENT_VOICE:-1}" == "0" ]] && exit 0
+WAIT_FOR_REPLY="${AGENT_VOICE_WAIT:-6}"
 
 payload="$(cat)"
 [[ -z "${payload//[[:space:]]/}" ]] && exit 0
 
 # 第一次进来：丢到后台立刻返回，别卡住 Claude Code
-if [[ "${WINCORP_TTS_WORKER:-}" != "1" ]]; then
-  ( WINCORP_TTS_WORKER=1 nohup "$0" >/dev/null 2>&1 <<<"$payload" & ) &
+if [[ "${AGENT_VOICE_WORKER:-}" != "1" ]]; then
+  ( AGENT_VOICE_WORKER=1 nohup "$0" >/dev/null 2>&1 <<<"$payload" & ) &
   exit 0
 fi
 

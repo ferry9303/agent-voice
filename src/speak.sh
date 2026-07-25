@@ -2,37 +2,39 @@
 # 朗读核心：stdin 收一段回复正文，压成一句后念出来。
 # 由 claude-stop.sh / codex-turn-end.sh 在后台调用，本身是阻塞的。
 #
-# 开关与配置（可写进 ~/.claude/tts.env 持久化）：
-#   WINCORP_TTS=0             关闭朗读
-#   WINCORP_TTS_ENGINE        auto(默认) | kokoro | say
-#   WINCORP_TTS_MODE=first    first=取回复首句(0 延迟) | llm=调 haiku 真摘要(约 10s)
-#   WINCORP_TTS_MAX_CHARS     播报长度上限，默认 200
-#   WINCORP_TTS_KOKORO_VOICE  Kokoro 音色，默认 zf_017
-#   WINCORP_TTS_SPEED         Kokoro 语速倍率，默认 1.0
-#   WINCORP_TTS_VOICE / _RATE say 的音色与语速（仅 say 引擎用）
+# 开关与配置（可写进 ~/.config/agent-voice/config.env 持久化）：
+#   AGENT_VOICE=0             关闭朗读
+#   AGENT_VOICE_ENGINE        auto(默认) | kokoro | say
+#   AGENT_VOICE_MODE=first    first=取回复首句(0 延迟) | llm=调 haiku 真摘要(约 10s)
+#   AGENT_VOICE_MAX_CHARS     播报长度上限，默认 200
+#   AGENT_VOICE_KOKORO_VOICE  Kokoro 音色，默认 zf_017
+#   AGENT_VOICE_SPEED         Kokoro 语速倍率，默认 1.0
+#   AGENT_VOICE_SAY_VOICE / _RATE say 的音色与语速（仅 say 引擎用）
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STATE_DIR="${TMPDIR:-/tmp}/wincorp-tts"
+STATE_DIR="${TMPDIR:-/tmp}/agent-voice"
 PID_FILE="$STATE_DIR/player.pid"
 
 # 递归护栏：llm 模式会再起一个 claude，它的 Stop hook 必须闭嘴
-[[ -n "${WINCORP_TTS_CHILD:-}" ]] && exit 0
+[[ -n "${AGENT_VOICE_CHILD:-}" ]] && exit 0
 
 # shellcheck disable=SC1090
-[[ -f "$HOME/.claude/tts.env" ]] && source "$HOME/.claude/tts.env"
+CONFIG="${AGENT_VOICE_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-voice/config.env}"
+# shellcheck disable=SC1090
+[[ -f "$CONFIG" ]] && source "$CONFIG"
 
-[[ "${WINCORP_TTS:-1}" == "0" ]] && exit 0
+[[ "${AGENT_VOICE:-1}" == "0" ]] && exit 0
 
-ENGINE="${WINCORP_TTS_ENGINE:-auto}"
-MODE="${WINCORP_TTS_MODE:-first}"
-KOKORO_URL="${WINCORP_TTS_KOKORO_URL:-http://127.0.0.1:8127}"
-KOKORO_VOICE="${WINCORP_TTS_KOKORO_VOICE:-zf_017}"
-SPEED="${WINCORP_TTS_SPEED:-1.0}"
-VOICE="${WINCORP_TTS_VOICE:-Tingting}"
-RATE="${WINCORP_TTS_RATE:-172}"
-PAUSE_SENTENCE="${WINCORP_TTS_PAUSE_SENTENCE:-260}"
-PAUSE_CLAUSE="${WINCORP_TTS_PAUSE_CLAUSE:-130}"
+ENGINE="${AGENT_VOICE_ENGINE:-auto}"
+MODE="${AGENT_VOICE_MODE:-first}"
+KOKORO_URL="${AGENT_VOICE_KOKORO_URL:-http://127.0.0.1:8127}"
+KOKORO_VOICE="${AGENT_VOICE_KOKORO_VOICE:-zf_017}"
+SPEED="${AGENT_VOICE_SPEED:-1.0}"
+VOICE="${AGENT_VOICE_SAY_VOICE:-Tingting}"
+RATE="${AGENT_VOICE_SAY_RATE:-172}"
+PAUSE_SENTENCE="${AGENT_VOICE_PAUSE_SENTENCE:-260}"
+PAUSE_CLAUSE="${AGENT_VOICE_PAUSE_CLAUSE:-130}"
 
 raw="$(cat)"
 [[ -z "${raw//[[:space:]]/}" ]] && exit 0
@@ -40,7 +42,7 @@ raw="$(cat)"
 summarize_with_llm() {
   local prompt
   prompt=$'把下面这段助手回复压成一句不超过25字的中文口语播报，只输出这句话，不要引号、不要任何解释：\n\n'"$raw"
-  WINCORP_TTS_CHILD=1 timeout 25 claude -p --model haiku \
+  AGENT_VOICE_CHILD=1 timeout 25 claude -p --model haiku \
     --strict-mcp-config --mcp-config '{"mcpServers":{}}' \
     <<<"$prompt" 2>/dev/null | tr -d '\r' | head -1
 }

@@ -1,4 +1,4 @@
-# cc-voice
+# agent-voice
 
 给 **Claude Code** 和 **Codex CLI** 加语音：回复结束时自动念一句摘要出来。
 
@@ -10,8 +10,8 @@ macOS only。
 ## 装
 
 ```bash
-git clone https://github.com/ferry9303/cc-voice.git
-cd cc-voice
+git clone https://github.com/ferry9303/agent-voice.git
+cd agent-voice
 ./install.sh
 ```
 
@@ -28,16 +28,16 @@ cd cc-voice
 Kokoro 有 103 个中文音色（`zf_*` 女声、`zm_*` 男声）。
 
 ```bash
-~/.claude/hooks/tts/audition.sh              # 试听默认候选的 7 个
-~/.claude/hooks/tts/audition.sh -l           # 列出全部 103 个
-~/.claude/hooks/tts/audition.sh -v zf_003,zm_010,zm_035   # 只听指定几个
-~/.claude/hooks/tts/audition.sh "换句话试试" # 换试听文本
+~/.local/share/agent-voice/bin/audition.sh              # 试听默认候选的 7 个
+~/.local/share/agent-voice/bin/audition.sh -l           # 列出全部 103 个
+~/.local/share/agent-voice/bin/audition.sh -v zf_003,zm_010,zm_035   # 只听指定几个
+~/.local/share/agent-voice/bin/audition.sh "换句话试试" # 换试听文本
 ```
 
-挑好写进 `~/.claude/tts.env`：
+挑好写进 `~/.config/agent-voice/config.env`：
 
 ```bash
-WINCORP_TTS_KOKORO_VOICE="${WINCORP_TTS_KOKORO_VOICE:-zf_021}"
+AGENT_VOICE_KOKORO_VOICE="${AGENT_VOICE_KOKORO_VOICE:-zf_021}"
 ```
 
 改完立即生效，不用重启也不用重载服务。
@@ -48,15 +48,15 @@ WINCORP_TTS_KOKORO_VOICE="${WINCORP_TTS_KOKORO_VOICE:-zf_021}"
 
 | 想做什么 | 怎么做 |
 |---|---|
-| 临时静音 | `~/.claude/tts.env` 里 `WINCORP_TTS` 改成 `0` |
-| 播报太长/太短 | 调 `WINCORP_TTS_MAX_CHARS`（默认 200，只想听一句就调到 60） |
-| 念太快/太慢 | 调 `WINCORP_TTS_SPEED`（默认 1.0） |
+| 临时静音 | `~/.config/agent-voice/config.env` 里 `AGENT_VOICE` 改成 `0` |
+| 播报太长/太短 | 调 `AGENT_VOICE_MAX_CHARS`（默认 200，只想听一句就调到 60） |
+| 念太快/太慢 | 调 `AGENT_VOICE_SPEED`（默认 1.0） |
 | 换音色 | 见上面「怎么挑音色」 |
-| 服务挂了 | `launchctl kickstart -k gui/$(id -u)/com.cc-voice.kokoro-tts` |
-| 看日志 | `~/Library/Logs/cc-voice/kokoro-tts.err.log` |
+| 服务挂了 | `launchctl kickstart -k gui/$(id -u)/com.agent-voice.kokoro-tts` |
+| 看日志 | `~/Library/Logs/agent-voice/kokoro-tts.err.log` |
 | 卸载 | `./uninstall.sh`（加 `--purge` 连模型一起删） |
 
-全部配置项见 [`tts.env.example`](tts.env.example)。
+全部配置项见 [`config.env.example`](config.env.example)。
 
 ## 方案
 
@@ -70,7 +70,7 @@ Codex CLI ────Stop hook──┘                                └ 失�
 
 - **摘要不调模型。** 试过用 `claude -p --model haiku` 做真摘要，实测 10 秒才回来，
   太慢。改成直接抽回复开头几句——本来写作习惯就是「先结论后解说」，开头那句
-  就是摘要，0 延迟 0 成本。想要真摘要把 `WINCORP_TTS_MODE` 改成 `llm`。
+  就是摘要，0 延迟 0 成本。想要真摘要把 `AGENT_VOICE_MODE` 改成 `llm`。
 - **hook 必须立刻返回。** 等最终回复落盘要轮询几秒，所以 hook 先把自己重新拉起到
   后台再干活，主进程 0.1 秒就退出，不卡住 CLI。
 - **常驻服务。** Kokoro 模型加载 + jieba 建词典要好几秒，每次现起进程根本没法用。
@@ -92,7 +92,7 @@ Codex CLI ────Stop hook──┘                                └ 失�
 | `src/kokoro_server.py` | 常驻 TTS 服务，`127.0.0.1:8127` |
 | `src/audition.sh` | 试听音色 |
 
-运行时资源（不进 git）：`~/.local/share/wincorp-tts/`（venv + 模型）。
+运行时资源（不进 git）：`~/.local/share/agent-voice/`（venv + 模型）。
 
 ## 语音输入
 
@@ -118,7 +118,7 @@ Codex CLI ────Stop hook──┘                                └ 失�
 - **`espeakng_loader` 自带的数据路径指向构建机**，必须 `EspeakWrapper.set_data_path()`
   显式覆盖，否则报 `phontab: No such file or directory`。
 - **配置文件里别直接赋值。** `tts.env` 全部用 `${VAR:-默认}` 写法，
-  否则 `WINCORP_TTS=0 某命令` 这种临时覆盖会被配置文件顶掉。
+  否则 `AGENT_VOICE=0 某命令` 这种临时覆盖会被配置文件顶掉。
 - **Stop hook 触发时最终回复常常还没落盘**，直接读 transcript 会拿到上一条，
   表现为「念的和上次一模一样」。所以按 uuid 去重并轮询等新消息，等不到就闭嘴。
 

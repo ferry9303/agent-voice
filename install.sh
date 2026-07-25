@@ -8,10 +8,11 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC="$REPO/src"
-LINK="${CC_VOICE_LINK:-$HOME/.claude/hooks/tts}"
-TTS_HOME="${WINCORP_TTS_HOME:-$HOME/.local/share/wincorp-tts}"
-LOG_DIR="$HOME/Library/Logs/cc-voice"
-LABEL="com.cc-voice.kokoro-tts"
+LINK="${AGENT_VOICE_LINK:-$HOME/.local/share/agent-voice/bin}"
+CONFIG_PATH="${AGENT_VOICE_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-voice/config.env}"
+APP_HOME="${AGENT_VOICE_HOME:-$HOME/.local/share/agent-voice}"
+LOG_DIR="$HOME/Library/Logs/agent-voice"
+LABEL="com.agent-voice.kokoro-tts"
 MODEL_BASE="https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.1"
 
 WANT_KOKORO=""
@@ -40,12 +41,13 @@ say_ok "$LINK -> $SRC"
 
 # ---------- 2. 配置文件 ----------
 say_step "配置文件"
-CONF="$HOME/.claude/tts.env"
+CONF="$CONFIG_PATH"
+mkdir -p "$(dirname "$CONF")"
 if [[ -f "$CONF" ]]; then
   say_ok "已存在，保留不动：$CONF"
 else
   mkdir -p "$(dirname "$CONF")"
-  cp "$REPO/tts.env.example" "$CONF"
+  cp "$REPO/config.env.example" "$CONF"
   say_ok "已创建：$CONF"
 fi
 
@@ -63,7 +65,7 @@ if any(h.get("command") == cmd for e in stop for h in e.get("hooks", [])):
     print("    \033[32m✓\033[0m Stop hook 已挂载")
 else:
     if path.is_file():
-        backup = path.with_suffix(".json.bak-cc-voice")
+        backup = path.with_suffix(".json.bak-agent-voice")
         backup.write_text(path.read_text())
     stop.append({"hooks": [{"type": "command", "command": cmd, "timeout": 10}]})
     path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n")
@@ -87,7 +89,7 @@ if any(h.get("command") == cmd for e in stop for h in e.get("hooks", [])):
     print("    \033[32m✓\033[0m Stop hook 已挂载")
 else:
     if path.is_file():
-        path.with_suffix(".json.bak-cc-voice").write_text(path.read_text())
+        path.with_suffix(".json.bak-agent-voice").write_text(path.read_text())
     stop.append({"hooks": [{"type": "command", "command": cmd, "timeout": 10}]})
     path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n")
     print("    \033[32m✓\033[0m 已写入 Stop hook")
@@ -125,25 +127,25 @@ if [[ "$WANT_KOKORO" == "yes" ]]; then
   [[ -n "$PYBIN" ]] || { echo "找不到与 $ARCH 匹配的 python3.12/3.13。" >&2; exit 1; }
   say_ok "用 ${PYBIN}（${ARCH}）"
 
-  mkdir -p "$TTS_HOME/models"
-  if [[ ! -x "$TTS_HOME/.venv/bin/python" ]]; then
-    "$PYBIN" -m venv "$TTS_HOME/.venv"
+  mkdir -p "$APP_HOME/models"
+  if [[ ! -x "$APP_HOME/.venv/bin/python" ]]; then
+    "$PYBIN" -m venv "$APP_HOME/.venv"
     say_ok "已建 venv"
   else
     say_ok "venv 已存在"
   fi
 
-  "$TTS_HOME/.venv/bin/pip" install -q --upgrade pip
-  "$TTS_HOME/.venv/bin/pip" install -q kokoro-onnx "misaki[zh]" soundfile
+  "$APP_HOME/.venv/bin/pip" install -q --upgrade pip
+  "$APP_HOME/.venv/bin/pip" install -q kokoro-onnx "misaki[zh]" soundfile
   say_ok "依赖就绪"
 
   # 中文必须用 v1.1-zh 专用模型，默认的 voices-v1.0.bin 不含中文音色
   for f in kokoro-v1.1-zh.onnx voices-v1.1-zh.bin; do
-    if [[ -s "$TTS_HOME/models/$f" ]]; then
+    if [[ -s "$APP_HOME/models/$f" ]]; then
       say_ok "$f 已存在"
     else
       echo "    下载 $f …"
-      curl -fL --retry 3 --progress-bar -o "$TTS_HOME/models/$f" "$MODEL_BASE/$f"
+      curl -fL --retry 3 --progress-bar -o "$APP_HOME/models/$f" "$MODEL_BASE/$f"
       say_ok "$f 下载完成"
     fi
   done
@@ -169,11 +171,11 @@ else
   say_ok "跳过，使用系统自带 say"
   python3 - <<'PY'
 import pathlib, re
-p = pathlib.Path.home() / ".claude/tts.env"
+p = pathlib.Path.home() / ".config/agent-voice/config.env"
 if p.is_file():
     t = p.read_text()
-    t = re.sub(r'WINCORP_TTS_ENGINE="\$\{WINCORP_TTS_ENGINE:-[a-z]+\}"',
-               'WINCORP_TTS_ENGINE="${WINCORP_TTS_ENGINE:-say}"', t)
+    t = re.sub(r'AGENT_VOICE_ENGINE="\$\{AGENT_VOICE_ENGINE:-[a-z]+\}"',
+               'AGENT_VOICE_ENGINE="${AGENT_VOICE_ENGINE:-say}"', t)
     p.write_text(t)
 PY
 fi
@@ -198,7 +200,7 @@ $(printf '\033[1m装好了。\033[0m')
   试听音色      $LINK/audition.sh
   列出全部音色  $LINK/audition.sh -l
   只听某几个    $LINK/audition.sh -v zf_003,zm_010
-  改配置        \$EDITOR ~/.claude/tts.env
-  临时静音      在 ~/.claude/tts.env 里把 WINCORP_TTS 改成 0
+  改配置        \$EDITOR ~/.config/agent-voice/config.env
+  临时静音      在 ~/.config/agent-voice/config.env 里把 AGENT_VOICE 改成 0
 
 EOF

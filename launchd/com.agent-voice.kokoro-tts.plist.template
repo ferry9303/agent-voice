@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.cc-voice.kokoro-tts</string>
+    <string>com.agent-voice.kokoro-tts</string>
     <key>ProgramArguments</key>
     <array>
         <string>__SERVE_SH__</string>
