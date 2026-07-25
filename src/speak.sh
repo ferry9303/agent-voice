@@ -14,7 +14,9 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STATE_DIR="${TMPDIR:-/tmp}/agent-voice"
+# 状态目录必须是所有会话共用的固定路径。放 TMPDIR 下不保险——
+# 不同登录会话/SSH/launchd 的 TMPDIR 未必相同，锁就形同虚设。
+STATE_DIR="${AGENT_VOICE_HOME:-$HOME/.local/share/agent-voice}/run"
 SPOOL="$STATE_DIR/spool"
 LOCK_DIR="$STATE_DIR/player.lock"
 PID_FILE="$STATE_DIR/player.pid"
@@ -68,18 +70,25 @@ mkdir -p "$SPOOL"
 # 播放者可能被 kill（agent-voice stop），所以锁是目录 + owner pid，
 # owner 进程没了就当僵尸锁清掉，不然一次异常退出会永久堵死播报。
 acquire_lock() {
+  local owner tries
   while :; do
     if mkdir "$LOCK_DIR" 2>/dev/null; then
       echo $$ >"$LOCK_DIR/owner"
       return 0
     fi
-    local owner
-    owner="$(cat "$LOCK_DIR/owner" 2>/dev/null)"
-    if [[ -z "$owner" ]] || ! kill -0 "$owner" 2>/dev/null; then
-      rm -rf "$LOCK_DIR"
-      continue
+    # mkdir 成功到写进 owner 之间有个窗口，这期间 owner 是空的。
+    # 读到空就当僵尸锁删掉的话，会把正要接管的那个进程的锁抢走，
+    # 两边就同时播了。所以空 owner 要多等几次再判死。
+    owner=""
+    for tries in 1 2 3 4 5; do
+      owner="$(cat "$LOCK_DIR/owner" 2>/dev/null)"
+      [[ -n "$owner" ]] && break
+      sleep 0.1
+    done
+    if [[ -n "$owner" ]] && kill -0 "$owner" 2>/dev/null; then
+      return 1                      # 确实有活着的播放者
     fi
-    return 1
+    rm -rf "$LOCK_DIR"              # 僵尸锁，清掉重抢
   done
 }
 
@@ -144,7 +153,16 @@ trap 'release_lock' EXIT INT TERM
 
 while :; do
   next="$(find "$SPOOL" -name '*.txt' 2>/dev/null | sort | head -1)"
-  [[ -z "$next" ]] && break
+  if [[ -z "$next" ]]; then
+    # 判空到释放锁之间也有窗口：别人可能刚好在这时入队然后抢锁失败，
+    # 那条就没人播了。所以先放锁、再看一眼，有货就重新抢回来接着播。
+    release_lock
+    sleep 0.1
+    next="$(find "$SPOOL" -name '*.txt' 2>/dev/null | sort | head -1)"
+    [[ -z "$next" ]] && break
+    acquire_lock || break
+    continue
+  fi
   text="$(cat "$next" 2>/dev/null)"
   rm -f "$next"
   [[ -z "${text//[[:space:]]/}" ]] && continue

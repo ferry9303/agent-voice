@@ -77,7 +77,7 @@ cmd_off() { conf_set AGENT_VOICE 0 && ui_ok "已关闭播报"; }
 # 掐掉当前这条并清空队列。播放者进程发现队列空了会自己退出并释放锁，
 # 所以不用去杀它，杀了反而留下僵尸锁。
 cmd_stop() {
-  local state="${TMPDIR:-/tmp}/agent-voice"
+  local state="${AGENT_VOICE_HOME:-$HOME/.local/share/agent-voice}/run"
   local queued
   queued="$(find "$state/spool" -name '*.txt' 2>/dev/null | wc -l | tr -d ' ')"
   rm -f "$state/spool"/*.txt 2>/dev/null

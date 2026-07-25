@@ -5,7 +5,7 @@
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-STATE_DIR="${TMPDIR:-/tmp}/agent-voice"
+STATE_DIR="${AGENT_VOICE_HOME:-$HOME/.local/share/agent-voice}/run"
 
 [[ -n "${AGENT_VOICE_CHILD:-}" ]] && exit 0
 # shellcheck disable=SC1090
