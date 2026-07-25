@@ -40,7 +40,7 @@ cmd_status() {
   local engine voice enabled
   enabled="$(conf_get AGENT_VOICE 1)"
   engine="$(conf_get AGENT_VOICE_ENGINE auto)"
-  voice="$(conf_get AGENT_VOICE_KOKORO_VOICE zf_017)"
+  voice="$(conf_get AGENT_VOICE_KOKORO_VOICE zf_001)"
 
   if [[ "$enabled" == "0" ]]; then
     ui_warn "播报已关闭（agent-voice on 打开）"

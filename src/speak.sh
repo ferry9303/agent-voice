@@ -7,7 +7,7 @@
 #   AGENT_VOICE_ENGINE        auto(默认) | kokoro | say
 #   AGENT_VOICE_MODE=first    first=取回复首句(0 延迟) | llm=调 haiku 真摘要(约 10s)
 #   AGENT_VOICE_MAX_CHARS     播报长度上限，默认 200
-#   AGENT_VOICE_KOKORO_VOICE  Kokoro 音色，默认 zf_017
+#   AGENT_VOICE_KOKORO_VOICE  Kokoro 音色，默认 zf_001
 #   AGENT_VOICE_SPEED         Kokoro 语速倍率，默认 1.0
 #   AGENT_VOICE_SAY_VOICE / _RATE say 的音色与语速（仅 say 引擎用）
 set -uo pipefail
@@ -29,7 +29,7 @@ CONFIG="${AGENT_VOICE_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-voice/conf
 ENGINE="${AGENT_VOICE_ENGINE:-auto}"
 MODE="${AGENT_VOICE_MODE:-first}"
 KOKORO_URL="${AGENT_VOICE_KOKORO_URL:-http://127.0.0.1:8127}"
-KOKORO_VOICE="${AGENT_VOICE_KOKORO_VOICE:-zf_017}"
+KOKORO_VOICE="${AGENT_VOICE_KOKORO_VOICE:-zf_001}"
 SPEED="${AGENT_VOICE_SPEED:-1.0}"
 VOICE="${AGENT_VOICE_SAY_VOICE:-Tingting}"
 RATE="${AGENT_VOICE_SAY_RATE:-172}"

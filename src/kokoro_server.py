@@ -5,7 +5,7 @@
 
   GET  /health          -> 200 ok
   POST /speak           -> audio/wav
-       {"text": "...", "voice": "zf_017", "speed": 1.0}
+       {"text": "...", "voice": "zf_001", "speed": 1.0}
 
 环境变量：
   AGENT_VOICE_HOME    模型与 venv 所在目录，默认 ~/.local/share/agent-voice
@@ -27,11 +27,10 @@ HOME = pathlib.Path(
 PORT = int(os.environ.get("AGENT_VOICE_PORT", "8127"))
 MODEL = HOME / "models/kokoro-v1.1-zh.onnx"
 VOICES = HOME / "models/voices-v1.1-zh.bin"
-DEFAULT_VOICE = os.environ.get("AGENT_VOICE_KOKORO_VOICE", "zf_017")
+DEFAULT_VOICE = os.environ.get("AGENT_VOICE_KOKORO_VOICE", "zf_001")
 MAX_BODY = 64 * 1024
 
-# 只在句末切开。切到逗号一级会把片段弄得太短，模型对短输入会明显放慢语速
-# ——实测纯语音时长涨了 37%，听着发拖。逗号、顿号留在片段内交给模型自己处理。
+# 各级标点切开后要插入的静音（毫秒），仅在 CHUNK_MODE 不是 off 时生效
 _SCALE = float(os.environ.get("AGENT_VOICE_PAUSE_SCALE", "1.0"))
 _SENTENCE = {"。": 380, "！": 380, "？": 380, "…": 380,
              ".": 380, "!": 380, "?": 380,

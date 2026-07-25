@@ -61,4 +61,4 @@ done
 
 echo
 echo "选定后写进 ~/.config/agent-voice/config.env："
-echo "  AGENT_VOICE_KOKORO_VOICE=zf_017"
+echo "  AGENT_VOICE_KOKORO_VOICE=zf_001"
