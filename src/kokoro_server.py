@@ -215,7 +215,10 @@ class Handler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length))
             text = str(payload["text"])
             voice = str(payload.get("voice") or DEFAULT_VOICE)
-            speed = float(payload.get("speed") or 1.0)
+            # 这个模型的 speed 参数无效（1.0~1.5 出来的时长一模一样），
+            # 而小于 1.0 会让 ONNX 整数溢出直接崩掉整个请求。钳住保平安，
+            # 变速交给客户端的 sox tempo 做。
+            speed = max(1.0, float(payload.get("speed") or 1.0))
         except (json.JSONDecodeError, KeyError, TypeError, ValueError):
             self._send(400, b"bad request", "text/plain")
             return

@@ -114,6 +114,16 @@ print(json.dumps({"text": sys.argv[1], "voice": sys.argv[2], "speed": float(sys.
   curl -sf --max-time 30 -X POST "$KOKORO_URL/speak" \
     -H 'Content-Type: application/json' -d "$body" -o "$wav" || return 1
   [[ -s "$wav" ]] || { rm -f "$wav"; return 1; }
+  # 模型自己的 speed 参数对 v1.1-zh 无效（实测 1.0~1.5 时长完全一样，
+  # 低于 1.0 还会让 ONNX 整数溢出崩溃），只能合成完再变速。
+  # sox tempo -s 是变速不变调，音高不会变尖。
+  if [[ "$SPEED" != "1.0" && "$SPEED" != "1" ]] && command -v sox >/dev/null 2>&1; then
+    if sox "$wav" "$wav.t" tempo -s "$SPEED" 2>/dev/null && [[ -s "$wav.t" ]]; then
+      mv "$wav.t" "$wav"
+    else
+      rm -f "$wav.t"
+    fi
+  fi
   play_and_wait afplay "$wav"
   rm -f "$wav"
 }
