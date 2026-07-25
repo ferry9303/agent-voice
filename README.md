@@ -42,6 +42,7 @@ agent-voice  让 Claude Code / Codex 把回复念出来
 
 ```
 /tts                  看状态
+/tts stop             掐掉正在播的，清空队列
 /tts off              临时静音
 /tts on               恢复
 /tts test 念一句试试
@@ -49,6 +50,9 @@ agent-voice  让 Claude Code / Codex 把回复念出来
 /tts voice zf_021     换音色
 /tts doctor           不出声时排查
 ```
+
+连着来好几条播报时默认**排队**依次播完，不叠音也不丢内容。想只听最新那条就把
+`AGENT_VOICE_QUEUE` 改成 `interrupt`。
 
 Codex 那边没有自定义斜杠命令的机制（它的自定义命令要走 MCP），所以给 Codex 的是
 一个 **skill**：直接跟它说「关掉语音播报」「换个声音」，它知道该调 `agent-voice`

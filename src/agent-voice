@@ -74,6 +74,21 @@ cmd_status() {
 cmd_on()  { conf_set AGENT_VOICE 1 && ui_ok "已开启播报"; }
 cmd_off() { conf_set AGENT_VOICE 0 && ui_ok "已关闭播报"; }
 
+# 掐掉当前这条并清空队列。播放者进程发现队列空了会自己退出并释放锁，
+# 所以不用去杀它，杀了反而留下僵尸锁。
+cmd_stop() {
+  local state="${TMPDIR:-/tmp}/agent-voice"
+  local queued
+  queued="$(find "$state/spool" -name '*.txt' 2>/dev/null | wc -l | tr -d ' ')"
+  rm -f "$state/spool"/*.txt 2>/dev/null
+  if [[ -f "$state/player.pid" ]]; then
+    kill "$(cat "$state/player.pid" 2>/dev/null)" 2>/dev/null
+  fi
+  pkill -x afplay 2>/dev/null
+  pkill -x say 2>/dev/null
+  ui_ok "已停止播放$([[ "$queued" -gt 0 ]] && echo "，并清掉队列里 $queued 条")"
+}
+
 cmd_voice() {
   [[ $# -ge 1 ]] || { ui_err "用法：agent-voice voice <音色名>"; return 1; }
   conf_set AGENT_VOICE_KOKORO_VOICE "$1" && ui_ok "音色已设为 $1"
@@ -125,6 +140,7 @@ cmd_help() {
     "$UI_BOLD" "$UI_RESET" "$UI_DIM" "$UI_RESET"
   ui_row_bold "status"          "看当前状态（默认）" 20
   ui_row_bold "on / off"        "开 / 关播报" 20
+  ui_row_bold "stop"            "掐掉正在播的，并清空队列" 20
   ui_row_bold "test [句子]"     "立刻念一句听听" 20
   ui_row_bold "voices"          "列出全部 103 个音色" 20
   ui_row_bold "try [音色]"      "试听音色，逗号分隔可听多个" 20
@@ -140,6 +156,7 @@ case "${1:-status}" in
   status)  cmd_status ;;
   on)      cmd_on ;;
   off)     cmd_off ;;
+  stop)    cmd_stop ;;
   test)    shift; cmd_test "$@" ;;
   voices)  "$HERE/audition.sh" -l ;;
   try)     shift; [[ $# -ge 1 ]] && "$HERE/audition.sh" -v "$1" || "$HERE/audition.sh" ;;

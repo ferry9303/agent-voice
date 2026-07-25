@@ -42,10 +42,30 @@ CLEAN_RULES = (
     (re.compile(r"^\s*[-=]{3,}\s*$", re.M), " "),    # 分隔线
     (re.compile(r"\*\*|__|~~|\*|_"), ""),            # 粗体/斜体/删除线
     (re.compile(r"https?://\S+"), "链接"),            # 裸链接
-    # 路径只留文件名：整段抹掉会把「改动点在 xxx」读成「改动点在 ，」
-    (re.compile(r"[~\w.-]*/[\w.-]+(?:/[\w.-]+)+"), lambda m: m.group(0).rstrip("/").rsplit("/", 1)[-1]),
+    # 破折号在朗读里就是个停顿，转成逗号；不转的话 TTS 会把它当未知符号
+    (re.compile(r"—{1,2}|――"), "，"),
+    (re.compile(r"[「」『』《》〈〉]"), ""),            # 书名号/引号只是视觉标记
+    # —— 以下三条专治「停顿插在词中间」——
+    # 路径、包名、带冒号的命令里的 / : . 会原样进入音素流，Kokoro 拿它们当断句符，
+    # 于是 commands/tts.md 会在词中间断两次。统一压成最后一个可读片段。
+    (re.compile(r"[~\w.-]*(?:[/:][\w.-]+)+"),
+     lambda m: re.split(r"[/:]", m.group(0).rstrip("/:"))[-1]),
+    (re.compile(r"(?<![\w])/([A-Za-z][\w-]*)"), r"\1"),   # /tts 这类命令去掉前导斜杠
+    # 去掉文件扩展名：".sh" 会被念成 "dot ess aitch"
+    # 用 + 允许连续多个扩展名：kokoro-tts.err.log 要一次剥干净，
+    # 只剥一层会剩下 kokoro-tts.err，那个点照样会断在词中间。
+    (re.compile(
+        r"\b([A-Za-z][\w-]*?)"
+        r"(?:\.(?:sh|md|py|js|mjs|cjs|ts|tsx|jsx|json|toml|ya?ml|txt|log|onnx|bin|wav|plist"
+        r"|env|cfg|conf|ini|lock|xml|csv|sql|rs|go|java|rb|php|c|h|cpp|swift|kt|err|out))+\b"),
+     r"\1"),
     (re.compile(r"[\U0001F300-\U0001FAFF☀-➿]"), ""),  # emoji
 )
+
+# 一句话里非中文字符占比超过这个数，就当成代码行跳过——整句都是标识符时，
+# 念出来是一串字母，既听不懂又打乱节奏。
+CODE_DENSITY_LIMIT = 0.6
+CJK_RE = re.compile("[一-鿿]")
 
 COLLAPSE_WS = re.compile(r"[ \t　]+")
 COLLAPSE_NL = re.compile(r"\n{2,}")
@@ -57,6 +77,19 @@ def clean(text: str) -> str:
     text = COLLAPSE_WS.sub(" ", text)
     text = COLLAPSE_NL.sub("\n", text)
     return text.strip()
+
+
+def is_code_heavy(sentence: str) -> bool:
+    """整句几乎全是标识符时返回 True。
+
+    这种句子念出来是一长串字母，听不懂还打乱节奏。纯英文句子不算——
+    判据是「有中文但中文占比很低」，也就是中文句子里塞满了代码。
+    """
+    body = sentence.strip()
+    if len(body) < 8 or not CJK_RE.search(body):
+        return False
+    cjk = len(CJK_RE.findall(body))
+    return (1 - cjk / len(body)) > CODE_DENSITY_LIMIT
 
 
 def split_sentences(text: str) -> list[str]:
@@ -84,9 +117,10 @@ def pick(sentences: list[str]) -> str:
     换行切出来的句子自带标点，标题/列表切出来的不带——后者要补个停顿，
     否则「结论」+「已修复缩略图链路」会连读成一句话。
     """
+    readable = [s for s in sentences if not is_code_heavy(s)] or sentences
     picked: list[str] = []
     total = 0
-    for sentence in sentences[:MAX_SENTENCES]:
+    for sentence in readable[:MAX_SENTENCES]:
         if picked and picked[-1][-1] not in SENTENCE_END:
             picked.append("，")
         picked.append(sentence)
