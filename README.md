@@ -110,12 +110,88 @@ Codex CLI ────Stop hook──┘                                └ 失�
 
 ## 语音输入
 
-两个 CLI 都已原生支持，装本项目与否都能用：
+**跟本项目无关**——两个 CLI 都已经原生支持了，装不装 agent-voice 都能用。
+这节纯粹是记下来省得再查一遍。
 
-- **Claude Code** — 内置 Voice mode（按住说话 / 点一下开关听写）。
-  需要 SoX（`brew install sox`）和已登录的 Claude.ai 账号。
-- **Codex CLI** — `realtime_conversation` 特性，默认关闭：
-  `codex features enable realtime_conversation`。是双向语音对话。
+分工大致是这样：
+
+```
+说话进去  →  两个 CLI 各自的原生能力
+念出来    →  agent-voice（因为两边都没有）
+```
+
+### Claude Code
+
+正式功能。要求已登录 Claude.ai 账号（API key 登录不支持），录音依赖 SoX。
+
+```bash
+brew install sox        # 它同时要 sox 和 rec 两个命令，这个包都带
+```
+
+在会话里：
+
+```
+/voice                  # 开启，再敲一次关闭
+```
+
+开启后，**输入框为空**时按住空格说话，松开就把识别结果发出去。首次按会弹
+macOS 麦克风授权，给终端放行一次即可。
+
+不想要「松手即发」，或者想改成点击式，写进 `~/.claude/settings.json`：
+
+```json
+"voice": {
+  "enabled": true,
+  "mode": "hold",
+  "autoSubmit": true
+}
+```
+
+| 键 | 含义 |
+|---|---|
+| `mode` | `hold`（默认，按住说）/ `tap`（点一下开始，再点停止并提交） |
+| `autoSubmit` | 松开空格是否直接提交。设 `false` 只填进输入框，可以先改再发——识别有错时省事 |
+
+空格的默认绑定是 `voice:pushToTalk`，只在输入框为空时生效，正常打字不受影响。
+要换键就在 `~/.claude/keybindings.json` 里重绑这个 action。
+
+### Codex CLI
+
+注意它跟 Claude Code 不是一回事：**不是听写成文字，是双向语音对话**，它会出声回你。
+OpenAI 自己标着 `under development`，有毛病属正常。
+
+默认关闭，开启后要重启 codex（配置在启动时读）：
+
+```bash
+codex features enable realtime_conversation
+```
+
+用法同样是在输入框里按住空格说话。设备和音色用 `/audio` 挑，也可以直接写
+`~/.codex/config.toml`：
+
+```toml
+[realtime]
+transport = "webrtc"    # 或 websocket
+voice = "cedar"
+
+[audio]
+microphone = "你的麦克风名"
+speaker = "你的扬声器名"
+```
+
+可选音色 19 个：`alloy` `arbor` `ash` `ballad` `breeze` `cedar` `coral` `cove`
+`echo` `ember` `juniper` `maple` `marin` `sage` `shimmer` `sol` `spruce` `vale` `verse`
+
+> Codex 自己会出声，跟 agent-voice 会**重复播报**同一段内容。嫌吵就
+> `agent-voice off`，或者只在 Claude Code 那边用语音输出。
+
+### 关于以上信息的来源
+
+Claude Code 那节、以及 Codex 的特性开关 / 配置字段 / 音色列表，都是从本机装的
+二进制里读出来的（`claude` 2.1.220、`codex` 0.145.0），不是抄文档。
+
+唯独 Codex 的 `/audio` 命令和「按住空格」这个键位没能从二进制里挖到——它的
+命令表是拼接压缩的——那两条来自官方文档。真要确认，开 codex 打个 `/` 看一眼列表。
 
 ## 踩过的坑
 
