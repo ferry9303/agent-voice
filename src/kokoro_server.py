@@ -39,10 +39,12 @@ _SENTENCE = {"。": 380, "！": 380, "？": 380, "…": 380,
 _CLAUSE = {"，": 240, ",": 240, "：": 260, ":": 260, "、": 170}
 
 # 切分粒度：
-#   sentence（默认）只在句末切，逗号交给模型
-#   clause         连逗号也切，停顿最规整但语速会慢，长句子听着发拖
-#   off            整段一次合成，最快但停顿时长完全不受控
-CHUNK_MODE = os.environ.get("AGENT_VOICE_CHUNK", "sentence")
+#   off（默认）  整段一次合成。语速最自然——切片会让模型对短片段放慢语速，
+#                实测纯语音时长 sentence +22%、clause +37%，听感上发拖。
+#                代价是停顿时长由模型自己决定，句号和逗号的轻重不太分得开。
+#   sentence     只在句末切，句间插入固定静音，停顿层次稳定
+#   clause       连逗号也切，最规整但最拖
+CHUNK_MODE = os.environ.get("AGENT_VOICE_CHUNK", "off")
 _ACTIVE = {"sentence": _SENTENCE, "clause": {**_SENTENCE, **_CLAUSE}}.get(CHUNK_MODE, {})
 PAUSE_MS = {ch: int(ms * _SCALE) for ch, ms in _ACTIVE.items()}
 
