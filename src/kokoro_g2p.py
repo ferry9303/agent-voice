@@ -25,6 +25,11 @@ class MixedG2P:
         from misaki import zh
         from phonemizer.backend.espeak.wrapper import EspeakWrapper
 
+        import zh_corrections
+
+        # 必须在 misaki 之前灌进 pypinyin 的全局词库，修「重装」这类误读
+        zh_corrections.apply()
+
         # espeakng_loader 自带的数据路径默认指向构建机，必须显式覆盖
         EspeakWrapper.set_library(espeakng_loader.get_library_path())
         EspeakWrapper.set_data_path(espeakng_loader.get_data_path())
