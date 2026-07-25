@@ -1,5 +1,5 @@
 ---
-description: 语音播报开关、音色、试听、排查（agent-voice）
+description: 语音播报开关 / 换音色 / 试听 / 排查不出声
 allowed-tools: Bash(agent-voice:*)
 ---
 
