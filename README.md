@@ -48,6 +48,8 @@ agent-voice  让 Claude Code / Codex 把回复念出来
 /tts test 念一句试试
 /tts try              试听音色
 /tts voice zf_021     换音色
+/tts chime            改成只响一声提示音
+/tts speech           切回念摘要
 /tts doctor           不出声时排查
 ```
 
@@ -91,6 +93,8 @@ agent-voice voices          列出全部 103 个音色
 agent-voice try zf_003,zm_010   试听指定音色
 agent-voice voice zf_021    设为默认音色
 agent-voice off / on        临时静音 / 恢复
+agent-voice chime           改成只响一声提示音（-l 列出可选提示音）
+agent-voice speech          切回念摘要
 agent-voice config          编辑配置
 agent-voice restart         重启合成服务
 agent-voice logs            看服务日志
@@ -107,6 +111,10 @@ agent-voice doctor          不出声时排查
 | 播报太长/太短 | `AGENT_VOICE_MAX_CHARS`（默认 200，只想听一句就调到 60） |
 | 念太快/太慢 | `AGENT_VOICE_SPEED`（默认 1.0） |
 | 不想用 Kokoro | `AGENT_VOICE_ENGINE` 改成 `say` |
+| 别念内容，响一声就行 | `AGENT_VOICE_STYLE` 改成 `chime`，声音选 `AGENT_VOICE_CHIME_SOUND` |
+
+`chime` 模式不经过合成引擎，也不用等回复正文落盘，所以回复一结束立刻就响；
+Kokoro 服务停着也照样出声。
 
 全部配置项见 [`config.env.example`](config.env.example)。卸载跑 `./uninstall.sh`
 （加 `--purge` 连模型一起删）。

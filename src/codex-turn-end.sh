@@ -21,6 +21,12 @@ else
 fi
 [[ -z "${payload//[[:space:]]/}" ]] && exit 0
 
+# 提示音模式：不用回复正文，直接响一声
+if [[ "${AGENT_VOICE_STYLE:-speech}" == "chime" ]]; then
+  ( nohup "$HERE/chime.sh" >/dev/null 2>&1 & ) &
+  exit 0
+fi
+
 mkdir -p "$STATE_DIR"
 reply="$(printf '%s' "$payload" | python3 "$HERE/extract-codex-reply.py" \
   --state "$STATE_DIR/codex-last.sha1" 2>/dev/null)"

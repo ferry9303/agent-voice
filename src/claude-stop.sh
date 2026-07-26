@@ -20,6 +20,12 @@ WAIT_FOR_REPLY="${AGENT_VOICE_WAIT:-6}"
 payload="$(cat)"
 [[ -z "${payload//[[:space:]]/}" ]] && exit 0
 
+# 提示音模式：不用回复正文，也就不用等它落盘，直接响一声
+if [[ "${AGENT_VOICE_STYLE:-speech}" == "chime" ]]; then
+  ( nohup "$HERE/chime.sh" >/dev/null 2>&1 & ) &
+  exit 0
+fi
+
 # 第一次进来：丢到后台立刻返回，别卡住 Claude Code
 if [[ "${AGENT_VOICE_WORKER:-}" != "1" ]]; then
   ( AGENT_VOICE_WORKER=1 nohup "$0" >/dev/null 2>&1 <<<"$payload" & ) &

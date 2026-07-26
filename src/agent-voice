@@ -11,6 +11,7 @@ APP_HOME="${AGENT_VOICE_HOME:-$HOME/.local/share/agent-voice}"
 URL="${AGENT_VOICE_KOKORO_URL:-http://127.0.0.1:8127}"
 LABEL="com.agent-voice.kokoro-tts"
 LOG_DIR="$HOME/Library/Logs/agent-voice"
+SYSTEM_SOUNDS="/System/Library/Sounds"
 
 conf_get() {
   [[ -f "$CONFIG" ]] || { echo "$2"; return; }
@@ -37,24 +38,32 @@ hook_present() { grep -q "agent-voice" "$1" 2>/dev/null; }
 cmd_status() {
   ui_title "agent-voice"
 
-  local engine voice enabled
+  local engine voice enabled style
   enabled="$(conf_get AGENT_VOICE 1)"
+  style="$(conf_get AGENT_VOICE_STYLE speech)"
   engine="$(conf_get AGENT_VOICE_ENGINE auto)"
   voice="$(conf_get AGENT_VOICE_KOKORO_VOICE zf_001)"
 
   if [[ "$enabled" == "0" ]]; then
     ui_warn "播报已关闭（agent-voice on 打开）"
+  elif [[ "$style" == "chime" ]]; then
+    ui_ok "提示音模式：只响一声，不念内容（agent-voice speech 切回朗读）"
   else
     ui_ok "播报已开启"
   fi
-  ui_info "引擎 $engine · 音色 $voice · 长度 $(conf_get AGENT_VOICE_MAX_CHARS 200) 字"
 
-  if service_up; then
-    ui_ok "Kokoro 服务运行中（${URL}）"
-  elif [[ "$engine" == "say" ]]; then
-    ui_skip "Kokoro 未启用，用系统 say"
+  if [[ "$style" == "chime" ]]; then
+    # 提示音模式不碰合成引擎，Kokoro 死活都无所谓，不必报警
+    ui_info "提示音 $(conf_get AGENT_VOICE_CHIME_SOUND Glass) · 音量 $(conf_get AGENT_VOICE_CHIME_VOLUME 1)"
   else
-    ui_err "Kokoro 服务没响应（agent-voice restart 重启）"
+    ui_info "引擎 $engine · 音色 $voice · 长度 $(conf_get AGENT_VOICE_MAX_CHARS 200) 字"
+    if service_up; then
+      ui_ok "Kokoro 服务运行中（${URL}）"
+    elif [[ "$engine" == "say" ]]; then
+      ui_skip "Kokoro 未启用，用系统 say"
+    else
+      ui_err "Kokoro 服务没响应（agent-voice restart 重启）"
+    fi
   fi
 
   hook_present "$HOME/.claude/settings.json" \
@@ -92,6 +101,27 @@ cmd_stop() {
 cmd_voice() {
   [[ $# -ge 1 ]] || { ui_err "用法：agent-voice voice <音色名>"; return 1; }
   conf_set AGENT_VOICE_KOKORO_VOICE "$1" && ui_ok "音色已设为 $1"
+}
+
+# 切到「只响一声」。带参数顺便换提示音，-l 列出系统自带的那些
+cmd_chime() {
+  if [[ "${1:-}" == "-l" || "${1:-}" == "--list" ]]; then
+    ls "$SYSTEM_SOUNDS" 2>/dev/null | sed 's/\.aiff$//'
+    return
+  fi
+  if [[ $# -ge 1 ]]; then
+    local sound="$1"
+    [[ "$sound" == */* || -r "$SYSTEM_SOUNDS/$sound.aiff" ]] \
+      || { ui_err "没有这个提示音：$sound（agent-voice chime -l 看全部）"; return 1; }
+    conf_set AGENT_VOICE_CHIME_SOUND "$sound" || return 1
+  fi
+  conf_set AGENT_VOICE_STYLE chime || return 1
+  ui_ok "已切到提示音模式：$(conf_get AGENT_VOICE_CHIME_SOUND Glass)（agent-voice speech 切回朗读）"
+  "$HERE/chime.sh"
+}
+
+cmd_speech() {
+  conf_set AGENT_VOICE_STYLE speech && ui_ok "已切回朗读模式"
 }
 
 cmd_test() {
@@ -140,6 +170,8 @@ cmd_help() {
     "$UI_BOLD" "$UI_RESET" "$UI_DIM" "$UI_RESET"
   ui_row_bold "status"          "看当前状态（默认）" 20
   ui_row_bold "on / off"        "开 / 关播报" 20
+  ui_row_bold "chime [提示音]"  "改成只响一声（-l 列出可选提示音）" 20
+  ui_row_bold "speech"          "切回念摘要" 20
   ui_row_bold "stop"            "掐掉正在播的，并清空队列" 20
   ui_row_bold "test [句子]"     "立刻念一句听听" 20
   ui_row_bold "voices"          "列出全部 103 个音色" 20
@@ -156,6 +188,8 @@ case "${1:-status}" in
   status)  cmd_status ;;
   on)      cmd_on ;;
   off)     cmd_off ;;
+  chime)   shift; cmd_chime "$@" ;;
+  speech)  cmd_speech ;;
   stop)    cmd_stop ;;
   test)    shift; cmd_test "$@" ;;
   voices)  "$HERE/audition.sh" -l ;;

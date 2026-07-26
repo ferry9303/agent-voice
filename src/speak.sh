@@ -4,6 +4,7 @@
 #
 # 开关与配置（可写进 ~/.config/agent-voice/config.env 持久化）：
 #   AGENT_VOICE=0             关闭朗读
+#   AGENT_VOICE_STYLE         speech(默认,念摘要) | chime(只响一声提示音)
 #   AGENT_VOICE_ENGINE        auto(默认) | kokoro | say
 #   AGENT_VOICE_MODE=first    first=取回复首句(0 延迟) | llm=调 haiku 真摘要(约 10s)
 #   AGENT_VOICE_MAX_CHARS     播报长度上限，默认 200
@@ -30,6 +31,10 @@ CONFIG="${AGENT_VOICE_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/agent-voice/conf
 [[ -f "$CONFIG" ]] && source "$CONFIG"
 
 [[ "${AGENT_VOICE:-1}" == "0" ]] && exit 0
+
+# 提示音模式：正文一概不念，只响一声。两个 hook 各自也有同样的分支，
+# 这里再挡一道是为了直接调 speak.sh（比如 agent-voice test）时行为一致。
+[[ "${AGENT_VOICE_STYLE:-speech}" == "chime" ]] && exec "$HERE/chime.sh"
 
 ENGINE="${AGENT_VOICE_ENGINE:-auto}"
 MODE="${AGENT_VOICE_MODE:-first}"
